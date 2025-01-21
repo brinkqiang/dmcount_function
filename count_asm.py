@@ -29,8 +29,38 @@ def compile_cpp_file(cpp_file, compiler):
 def count_asm_lines(binary_file, function_name, compiler):
     """根据编译器环境使用不同工具进行反汇编并统计函数的汇编行数"""
     try:
+        # 获取目标文件中的符号表，找到目标函数的修饰符号
         if compiler == "msvc":
-            # MSVC 环境使用 dumpbin 进行反汇编
+            # MSVC 环境使用 dumpbin 获取符号
+            nm_result = subprocess.run(
+                ["dumpbin", "/symbols", binary_file],
+                text=True,
+                capture_output=True,
+                check=True
+            )
+        else:
+            # GCC 环境使用 nm 获取符号
+            nm_result = subprocess.run(
+                ["nm", binary_file],
+                text=True,
+                capture_output=True,
+                check=True
+            )
+        
+        symbols = nm_result.stdout.splitlines()
+        mangled_name = None
+
+        for symbol in symbols:
+            if function_name in symbol:
+                mangled_name = symbol.split()[-1]  # 获取函数的修饰符号（mangled name）
+                break
+
+        if not mangled_name:
+            print(f"Function '{function_name}' not found in symbols.")
+            return -1
+
+        # 使用 objdump 或 dumpbin 反汇编
+        if compiler == "msvc":
             result = subprocess.run(
                 ["dumpbin", "/disasm", binary_file],
                 text=True,
@@ -38,7 +68,6 @@ def count_asm_lines(binary_file, function_name, compiler):
                 check=True
             )
         else:
-            # GCC 环境使用 objdump 进行反汇编
             result = subprocess.run(
                 ["objdump", "-d", binary_file],
                 text=True,
@@ -47,8 +76,7 @@ def count_asm_lines(binary_file, function_name, compiler):
             )
 
         asm_code = result.stdout
-        # 查找目标函数的汇编代码
-        start_flag = f"<{function_name}>:"
+        start_flag = f"<{mangled_name}>:"
         lines = asm_code.splitlines()
         count = 0
         inside_function = False
