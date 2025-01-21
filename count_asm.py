@@ -52,7 +52,10 @@ def count_asm_lines(binary_file, function_name, compiler):
 
         for symbol in symbols:
             if function_name in symbol:
-                mangled_name = symbol.split()[-1]  # 获取函数的修饰符号（mangled name）
+                if compiler == "msvc":
+                    mangled_name = function_name
+                else:
+                    mangled_name = symbol.split()[-1]  # 获取函数的修饰符号（mangled name）
                 break
 
         if not mangled_name:
@@ -75,22 +78,55 @@ def count_asm_lines(binary_file, function_name, compiler):
                 check=True
             )
 
+        if compiler == "msvc":
+            result = subprocess.run(
+                ["dumpbin", "/disasm", binary_file],
+                text=True,
+                capture_output=True,
+                check=True
+            )
+        else:
+            result = subprocess.run(
+                ["objdump", "-d", binary_file],
+                text=True,
+                capture_output=True,
+                check=True
+            )
+
         asm_code = result.stdout
-        start_flag = f"<{mangled_name}>:"
         lines = asm_code.splitlines()
         count = 0
         inside_function = False
-
-        for line in lines:
-            if start_flag in line:
-                inside_function = True
-                continue
-            if inside_function:
-                # 遇到空行或其他符号，认为函数结束
-                if line.strip() == "" or not line.startswith(" "):
-                    break
-                # 统计实际指令行
-                count += 1
+        print(f"{binary_file}, {function_name}, {compiler}, {mangled_name}")
+        if compiler == "msvc":
+            # MSVC 格式处理
+            start_flag = f"{mangled_name}("
+            for line in lines:
+                if start_flag in line and "):" in line:
+                    inside_function = True
+                    continue
+                if inside_function:
+                    # 遇到ret指令结束
+                    if "ret" in line:
+                        break
+                    # 统计有效指令行
+                    if ":" in line and not line.strip().endswith(":"):
+                        # 排除调试指令
+                        if "int 3" not in line and "nop" not in line:
+                            count += 1
+        else:
+            # GCC 格式处理
+            start_flag = f"<{mangled_name}>:"
+            for line in lines:
+                if start_flag in line:
+                    inside_function = True
+                    continue
+                if inside_function:
+                    # 遇到空行或其他符号，认为函数结束
+                    if line.strip() == "" or not line.startswith(" "):
+                        break
+                    # 统计实际指令行
+                    count += 1
 
         return count
     except subprocess.CalledProcessError as e:
