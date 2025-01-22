@@ -78,21 +78,6 @@ def count_asm_lines(binary_file, function_name, compiler):
                 check=True
             )
 
-        if compiler == "msvc":
-            result = subprocess.run(
-                ["dumpbin", "/disasm", binary_file],
-                text=True,
-                capture_output=True,
-                check=True
-            )
-        else:
-            result = subprocess.run(
-                ["objdump", "-d", binary_file],
-                text=True,
-                capture_output=True,
-                check=True
-            )
-
         asm_code = result.stdout
         lines = asm_code.splitlines()
         count = 0
