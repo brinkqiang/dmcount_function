@@ -2,6 +2,7 @@ import subprocess
 import sys
 import os
 import platform
+import re
 
 def detect_compiler():
     """自动检测当前使用的编译器环境"""
@@ -25,6 +26,21 @@ def compile_cpp_file(cpp_file, compiler):
             "g++", "-g", "-O0", "-std=c++17", "-c", cpp_file, "-o", "main.o"
         ]
     subprocess.run(compile_command, check=True)
+
+def extract_function_name(line, function_name):
+    """
+    提取符号行中与指定函数名匹配的原始函数名称
+    
+    :param line: 符号表中的一行
+    :param function_name: 目标函数的名称
+    :return: 原始函数名称或 None
+    """
+    # 正则匹配函数名
+    pattern = rf"\|\s*\?[\w@\$]+.*\((?:.*)\b({function_name})\b"
+    match = re.search(pattern, line)
+    if match:
+        return match.group(1)  # 返回捕获的函数名称
+    return None
 
 def count_asm_lines(binary_file, function_name, compiler):
     """根据编译器环境使用不同工具进行反汇编并统计函数的汇编行数"""
@@ -53,7 +69,7 @@ def count_asm_lines(binary_file, function_name, compiler):
         for symbol in symbols:
             if function_name in symbol:
                 if compiler == "msvc":
-                    mangled_name = function_name
+                    mangled_name = extract_function_name(symbol, function_name)
                 else:
                     mangled_name = symbol.split()[-1]  # 获取函数的修饰符号（mangled name）
                 break
